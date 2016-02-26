@@ -7,8 +7,17 @@ import sys
 
 MAX_FILE_SIZE = 200000
 MIN_FILE_SIZE = 100000
+HEADER_SIZE	  = 64
+F_CLEAN		  = 0
+F_INFECTED	  = 1
+
+SIGNATURE = [
+				"73797374656d63746c2064697361626c65",	#systemctl disable
+				"2f6c69622f6376612d73737973"			#/lib/cva-ssys
+			]
 
 elfMagic = "7F454C46"
+
 flag_elf = 0
 flag_64bit = 0
 flag_32bit = 0
@@ -27,24 +36,24 @@ def check_size():
 		return 0
 	return fsize
 
-def check_elf():
+def scan_file():
 	global buf
 	global fsize
 	global elfMagic
 	global flag_64bit
 	global flag_32bit
 	global entry_point
-	
+	flag_infected = 0
 	print ("File: " + str(sys.argv[1]))
 
 	with open(str(sys.argv[1]), "rb") as f:
 		#read header
-		buf = f.read(fsize)
+		buf = f.read(HEADER_SIZE)
 		if buf:
 			#parse the ELF structure, more details here: http://wiki.osdev.org/ELF
 			aux = buf[:4]
 			hexval = binascii.hexlify(aux).upper()
-			pos = string.find(hexval, elfMagic);
+			pos = string.find(hexval, elfMagic)
 			if (pos == 0):
 				flag_elf = 1
 			else:
@@ -66,14 +75,44 @@ def check_elf():
 					aux = buf[24:32]
 					val = struct.unpack('Q', aux);
 					entry_point = hex(val[0])
-					#print ("entrypoint = " + str(entry_point))
+					
+					aux = buf[32:40]
+					val = struct.unpack('Q', aux);
+					program_header_offset = hex(val[0])
+					
+					aux = buf[40:48]
+					val = struct.unpack('Q', aux);
+					section_header_offset = hex(val[0])
+					
+					print ("program_header_offset = " + str(program_header_offset))
+					print ("section_header_offset = " + str(section_header_offset))
 					
 				else:
 					aux = buf[24:28]
 					val = struct.unpack('Q', aux);
 					entry_point = hex(val[0])					
 			
-		return flag_elf
+			
+			if (flag_64bit == 1):
+				print ("64bit file")
+
+			print ("EP = " + str(entry_point))
+			print ("File size = " + str(fsize))
+			
+			if entry_point < fsize:
+				print "Seek in file"
+				f.seek(entry_point)
+				
+				print "Get file bytes"			
+				buf = binascii.hexlify(f.read(fsize - entry_point)).upper()
+				
+				for index in range(len(SIGNATURE)):
+					pos = string.find(buf, SIGNATURE[index])
+					print "Pos: " + str(pos)
+					if ( pos > 0):
+						return F_INFECTED
+				
+		return F_CLEAN
 
 ###MAIN###
 fsize = check_size()
@@ -81,16 +120,12 @@ if (fsize == 0):
 	print ("Incorrect file size")
 	sys.exit(0)
 
-isElf = check_elf()
-if (isElf == 1):
-	print ("ELF file")
+isInf = scan_file()
+if (isInf == 1):
+	print ("[+] Malware detected")
 else:
-	print ("Not an ELF file")
+	print ("[-] No malware detected")
 
-if (flag_64bit == 1):
-	print ("64bit file")
-
-print ("EP = " + str(entry_point))
 #start search from EP onwards
 
 sys.exit(0)
