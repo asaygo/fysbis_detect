@@ -17,10 +17,12 @@ F_CLEAN		  = 0
 F_INFECTED	  = 1
 
 SIGNATURE = [
-				"73797374656d63746c2064697361626c65",	#systemctl disable
-				"2f6c69622f6376612d73737973",			#/lib/cva-ssys
-				"746172676574",							#target
-				"636f6e6669672f6175746f7374617274"		#config/autostart
+				"73797374656d63746c2064697361626c65",						#systemctl disable
+				"2f6c69622f6376612d73737973",								#/lib/cva-ssys
+				"746172676574",												#target
+				"636f6e6669672f6175746f7374617274",							#config/autostart
+				"726d202d6620",												#rm -f 
+				"57524954452046494c45204953204e4f542053554343455353"		#WRITE FILE IS NOT SUCCESS
 			]
 
 #to increase the heuristic, reduce the SENSITIVITY
@@ -190,10 +192,10 @@ def scan_file():
 			if max_file_offset < fsize:
 				f.seek(max_file_offset)
 				
-				strbuf = binascii.hexlify(buf)
+				strbuf = binascii.hexlify(buf).upper()
 				count = 0
 				for index in range(len(SIGNATURE)):
-					pos = strbuf.find(SIGNATURE[index], max_file_offset)
+					pos = strbuf.find(SIGNATURE[index].upper(), max_file_offset)
 					#print "Malware identified at offset: " + str(pos)
 					if ( pos > 0):
 						count = count +1
