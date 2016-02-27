@@ -221,6 +221,4 @@ if (isInf == 1):
 else:
 	print ("[-] No malware detected")
 
-#start search from EP onwards
-
 sys.exit(0)
