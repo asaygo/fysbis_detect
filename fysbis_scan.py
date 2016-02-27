@@ -26,6 +26,7 @@ buf = None
 entry_point = 0
 program_header_offset = 0
 section_header_offset = 0
+header_size = 0
 
 def check_size():
 	global MIN_FILE_SIZE
@@ -43,12 +44,22 @@ def scan_file():
 	global flag_64bit
 	global flag_32bit
 	global entry_point
+	global program_header_offset
+	global section_header_offset
+	global header_size
 	flag_infected = 0
+	pheader_entry_sz	= 0
+	pheader_entry_no	= 0
+	sheader_entry_sz	= 0
+	sheader_entry_no	= 0
+	shstrtab_index		= 0
+
+
 	print ("File: " + str(sys.argv[1]))
 
 	with open(str(sys.argv[1]), "rb") as f:
 		#read header
-		buf = f.read(HEADER_SIZE)
+		buf = f.read(fsize)
 		if buf:
 			#parse the ELF structure, more details here: http://wiki.osdev.org/ELF
 			aux = buf[:4]
@@ -62,7 +73,6 @@ def scan_file():
 			#check if 32 or 64bit
 			aux = buf[4:5]
 			hexval = binascii.hexlify(aux).upper()
-			print ("bits = " + str(hexval))
 			if (hexval == "02"):
 				flag_64bit = 1
 			if (hexval == "01"):
@@ -71,11 +81,11 @@ def scan_file():
 			endian = binascii.hexlify(buf[5:6]).upper()			
 			if (flag_64bit == 1):
 				if endian == "01":
-					#get entrypoint
+
 					aux = buf[24:32]
 					val = struct.unpack('Q', aux);
 					entry_point = hex(val[0])
-					
+										
 					aux = buf[32:40]
 					val = struct.unpack('Q', aux);
 					program_header_offset = hex(val[0])
@@ -84,31 +94,69 @@ def scan_file():
 					val = struct.unpack('Q', aux);
 					section_header_offset = hex(val[0])
 					
-					print ("program_header_offset = " + str(program_header_offset))
-					print ("section_header_offset = " + str(section_header_offset))
+					aux = buf[52:54]
+					val = struct.unpack('H', aux);
+					header_size = hex(val[0])
 					
+					aux = buf[54:56]
+					val = struct.unpack('H', aux);
+					pheader_entry_sz = val[0]
+					
+					aux = buf[56:58]
+					val = struct.unpack('H', aux);
+					pheader_entry_no = val[0]
+					
+					aux = buf[58:60]
+					val = struct.unpack('H', aux);
+					sheader_entry_sz = hex(val[0])
+
+					aux = buf[60:62]
+					val = struct.unpack('H', aux);
+					sheader_entry_no = hex(val[0])
+
+					aux = buf[62:64]
+					val = struct.unpack('H', aux);
+					shstrtab_index = hex(val[0])
+
 				else:
 					aux = buf[24:28]
 					val = struct.unpack('Q', aux);
 					entry_point = hex(val[0])					
 			
 			
-			if (flag_64bit == 1):
-				print ("64bit file")
-
-			print ("EP = " + str(entry_point))
-			print ("File size = " + str(fsize))
+			max_load_addr = 0
+			max_file_offset = 0
+			start_offset = 64
+			load_addr = 0
+			for i in range(0,int(pheader_entry_no)):						
+				aux = buf[i*pheader_entry_sz+start_offset+8:i*pheader_entry_sz+start_offset+16]
+				val = struct.unpack('Q', aux);
+				file_offset = val[0]
+						
+				aux = buf[i*pheader_entry_sz+start_offset+16:i*pheader_entry_sz+start_offset+24]
+				val = struct.unpack('Q', aux);
+				load_addr = val[0]
+						
+				if load_addr < entry_point and load_addr > max_load_addr:
+					max_load_addr = load_addr
+					max_file_offset = file_offset
+					
+			if max_load_addr > 0 and max_file_offset > 0:
+				print ("Section load addr: " + str(max_load_addr))
+				print ("Section file offset: " + str(max_file_offset))
+			else:
+				return F_CLEAN	
 			
-			if entry_point < fsize:
-				print "Seek in file"
-				f.seek(entry_point)
+			#if (flag_64bit == 1):
+			#	print ("64bit file")
+			
+			if max_file_offset < fsize:
+				f.seek(max_file_offset)
 				
-				print "Get file bytes"			
-				buf = binascii.hexlify(f.read(fsize - entry_point)).upper()
-				
+				strbuf = binascii.hexlify(buf)
 				for index in range(len(SIGNATURE)):
-					pos = string.find(buf, SIGNATURE[index])
-					print "Pos: " + str(pos)
+					pos = strbuf.find(SIGNATURE[index], max_file_offset)
+					#print "Malware identified at offset: " + str(pos)
 					if ( pos > 0):
 						return F_INFECTED
 				
