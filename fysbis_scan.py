@@ -288,8 +288,8 @@ def examine_system():
 def show_help():
 	print ("Program [option] <file name>")
 	print ("\nOptions:")
-	print ("-f\t\t\tscan a file to see if it's malicious")
-	print ("-s\t\t\tscan a system for forensic traces (it won't scan the files)")
+	print ("-f filename\t\tscan a file to see if it's malicious")
+	print ("-s\t\t\tscan a system for forensic traces (checks the list of running processes and files)")
 	
 
 ###MAIN###
