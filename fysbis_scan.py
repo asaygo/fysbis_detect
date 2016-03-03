@@ -16,6 +16,8 @@ MIN_FILE_SIZE = 100000
 F_CLEAN		  = 0
 F_INFECTED	  = 1
 
+#code fragments and strings
+#used to detect the Fysbis
 SIGNATURE = [
 				"73797374656d63746c2064697361626c65",						#systemctl disable
 				"2f6c69622f6376612d73737973",								#/lib/cva-ssys
@@ -33,6 +35,8 @@ fsize = 0
 filename = ""
 buf = None
 
+#check the file size if it's between
+#MIN_FILE_SIZE and MAX_FILE_SIZE
 def check_size():
 	global MIN_FILE_SIZE
 	global MAX_FILE_SIZE
@@ -48,6 +52,8 @@ def check_size():
 	
 	return fsize
 
+#scans the file and if the signature is found
+#return 1, else return 0
 def scan_file():
 	global elfMagic
 	global fsize	
@@ -69,7 +75,7 @@ def scan_file():
 	print ("File: " + str(filename))
 	try:
 		with open(str(filename), "rb") as f:
-			#read header
+			#read file
 			buf = f.read(fsize)
 			if buf:
 				#parse the ELF structure, more details here: http://wiki.osdev.org/ELF
@@ -89,6 +95,9 @@ def scan_file():
 				if (hexval == "01"):
 					flag_32bit = 1
 				
+				#get the values from the ELF header to calculate the file offset of the entrypoint
+				#parse the sections load address/file offset to determine where the entrypoint is
+				#scan from the beginning of the section onwards to see if it matches our signature
 				endian = binascii.hexlify(buf[5:6]).upper()			
 				if (flag_64bit == 1):
 					if endian == "01":
@@ -96,7 +105,7 @@ def scan_file():
 						aux = buf[24:32]
 						val = struct.unpack('Q', aux);
 						entry_point = hex(val[0])
-											
+							
 						aux = buf[32:40]
 						val = struct.unpack('Q', aux);
 						program_header_offset = hex(val[0])
@@ -166,7 +175,11 @@ def scan_file():
 						aux = buf[50:52]
 						val = struct.unpack('H', aux);
 						shstrtab_index = hex(val[0])
-							
+				
+				#go through the page headers and determine 
+				#in which section the entrypoint is
+				#we will then scan from the beginning 
+				#of the section onwards
 				max_load_addr = 0
 				max_file_offset = 0
 				start_offset = 64
@@ -200,6 +213,7 @@ def scan_file():
 				if max_file_offset < fsize:
 					f.seek(max_file_offset)
 					
+					#start checking if the signatures are in the file
 					strbuf = binascii.hexlify(buf).upper()
 					count = 0
 					for index in range(len(SIGNATURE)):
@@ -208,6 +222,10 @@ def scan_file():
 						if ( pos > 0):
 							count = count +1
 					
+					#by default the SENSITIVITY means that
+					#all sigs should be matched
+					#this can be decreased to make the scanner
+					#more resiliant to code changes
 					if (count >= SENSITIVITY):
 						return F_INFECTED
 		
@@ -216,10 +234,15 @@ def scan_file():
 					
 		return F_CLEAN
 
-#more details about the IOCs
-#http://malwrforensics.com/fysbis.html
+#more details about how the IOCs were extracted: http://malwrforensics.com/fysbis.html
+#the function returns 1 if any file system trace is found, 0 otherwise
 def examine_filesystem():
 	trace = 0
+	
+	#check the file system to see if the malware or
+	#files dropped by the malware exist
+	#display a message if found
+	
 	if os.path.exists("/bin/rsyncd"):
 		print("\t/bin/rsyncd found")
 		trace = 1
@@ -254,12 +277,20 @@ def examine_filesystem():
 	
 	return trace
 
+#more details about how the IOCs were extracted: http://malwrforensics.com/fysbis.html
+#the function returns 1 if any process trace is found, 0 otherwise
 def examine_processes():
+	
+	#get all the pids
 	pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
 	trace = 0
 	for pid in pids:
 		try:
+			#get full command line for each process
 			proc_data = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+			
+			#extract only the file name, without arguments
+			#match it with the IOCs
 			pos = proc_data.find(' ')
 			if pos > 0:
 				pname = proc_data[0:pos]
@@ -277,6 +308,7 @@ def examine_processes():
 
 	return trace
 
+#the function returns 1 if any file system/process trace is found, 0 otherwise
 def examine_system():
 	if examine_processes() == 1:
 		return 1
@@ -293,22 +325,28 @@ def show_help():
 	
 
 ###MAIN###
+
+#check the arguments
 if len(sys.argv) < 2 or len(sys.argv) > 3:
 	show_help()
 	sys.exit(0)
 
+#if it's -f we need to scan a file
 if sys.argv[1] == '-f':
 	if len(sys.argv) == 3:
 		filename = sys.argv[2] 
 	else:
+		#if we don't have a file name, show help and exit
 		show_help()
 		sys.exit(0)
 
+	#check file size
 	fsize = check_size()
 	if (fsize == 0):
 		print ("Incorrect file size")
 		sys.exit(0)
 
+	#scan the file
 	isInf = scan_file()
 	if (isInf == 1):
 		print ("[+] Malware detected")
@@ -316,6 +354,7 @@ if sys.argv[1] == '-f':
 		print ("[-] No malware detected")
 
 if sys.argv[1] == '-s':
+	#examine the file system and processes
 	if examine_system() == 1:
 		print ("[+] Forensic traces detected")
 	else:
