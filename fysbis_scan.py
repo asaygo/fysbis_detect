@@ -267,8 +267,7 @@ def examine_processes():
 				if pname.find("/bin/rsyncd") >= 0:
 					trace = 1
 					print "\t/bin/rsyncd found"
-					
-					
+
 				if pname.find("dbus-inotifier") >= 0:
 					trace = 1
 					print "\tdbus-inotifier found"
@@ -277,8 +276,6 @@ def examine_processes():
 			continue
 
 	return trace
-
-
 
 def examine_system():
 	if examine_processes() == 1:
