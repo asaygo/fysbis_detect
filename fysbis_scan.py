@@ -256,13 +256,29 @@ def examine_filesystem():
 
 def examine_processes():
 	pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
-
+	trace = 0
 	for pid in pids:
 		try:
 			proc_data = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
-			print proc_data
+			pos = proc_data.find(' ')
+			if pos > 0:
+				pname = proc_data[0:pos]
+				
+				if pname.find("/bin/rsyncd") >= 0:
+					trace = 1
+					print "\t/bin/rsyncd found"
+					
+					
+				if pname.find("dbus-inotifier") >= 0:
+					trace = 1
+					print "\tdbus-inotifier found"
+					
 		except IOError:
 			continue
+
+	return trace
+
+
 
 def examine_system():
 	if examine_processes() == 1:
